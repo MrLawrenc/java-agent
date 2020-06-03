@@ -2,6 +2,9 @@ package com.github.mrlawrenc;
 
 import com.sun.tools.attach.VirtualMachine;
 
+import java.io.File;
+import java.io.FileInputStream;
+import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
 import java.util.LinkedList;
 import java.util.List;
@@ -57,8 +60,15 @@ public class Premain {
      * 执行完后再唤醒所有线程。若此操作不需要在safepoint下，或者当前系统已经在safepoint下，则可以直接执行该操作了。
      * 所以，在safepoint的vm操作下，只有vm线程可以执行具体的逻辑，其他线程都要进入safepoint下并被挂起，直到完成此次操作。
      */
-    public static void agentmain(String agentArgs, Instrumentation inst) {
+    public static void agentmain(String agentArgs, Instrumentation inst)   {
         System.out.println("agentmain  start..............");
+        if (true) {
+            try {
+                hot(agentArgs, inst);
+            } catch (Exception exception) {
+                exception.printStackTrace();
+            }
+        }
         try {
             List<Class<?>> retransformClasses = new LinkedList<>();
             Class<?>[] loadedClass = inst.getAllLoadedClasses();
@@ -86,6 +96,22 @@ public class Premain {
         System.out.println("attach start ....");
     }
 
+
+    public static void hot(String agentArgs, Instrumentation inst) throws Exception {
+        Class[] allLoadedClasses = inst.getAllLoadedClasses();
+
+        for (Class aClass : allLoadedClasses) {
+            if (aClass.getName().equals("com.swust.HelloServiceImpl")) {
+                File file = new File("F:\\openSources\\test\\out\\production\\test\\com\\swust\\HelloServiceImpl.class");
+                byte[] bytes = new FileInputStream(file).readAllBytes();
+                System.out.println("size:" + bytes.length);
+
+                ClassDefinition definition = new ClassDefinition(aClass, bytes);
+                inst.redefineClasses(definition);
+            }
+        }
+
+    }
 
     public void attach() {
         try {
