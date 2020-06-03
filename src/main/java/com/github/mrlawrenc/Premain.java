@@ -1,15 +1,24 @@
 package com.github.mrlawrenc;
 
+import com.sun.tools.attach.VirtualMachine;
+
 import java.lang.instrument.Instrumentation;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Optional;
 
 /**
  * @author : MrLawrenc
  * @date : 2020/6/2 22:52
- * @description : TODO
+ * premain和agentmain为两组方法，每组都会优先寻找两个参数的方法，没有再使用一个参数的方法，通过
+ * <Premain-Class>com.github.mrlawrenc.Premain</Premain-Class>
+ * <Agent-Class>com.github.mrlawrenc.Premain</Agent-Class>
+ * 两个参数指定，当然也可以手动写在配置中
  * <p>
  * 使用
- * -javaagent:F:\JavaProject\2020\empty-web\target\java-agent-1.0-SNAPSHOT-jar-with-dependencies.jar 方式可以指定代理的jar
+ * 1. 启动时加载  -javaagent:F:\JavaProject\2020\empty-web\target\java-agent-1.0-SNAPSHOT-jar-with-dependencies.jar 方式可以指定代理的jar
  * 若想加参数则为-javaagent:F:\target\java-agent.jar=this-is-args  this-is-args为参数值，会传递到agentOps
+ * 2. 运行中加载 使用com.sun.tools.attach.VirtualMachine加载 <a herf="https://article.itxueyuan.com/GoLyw4"></a>
  */
 public class Premain {
 
@@ -23,7 +32,8 @@ public class Premain {
     public static void premain(String agentOps, Instrumentation inst) {
         System.out.println("premain doing..........");
         System.out.println("agent args : " + agentOps);
-        customLogic(agentOps, inst);
+        //add方法会对所有类进行拦截
+        inst.addTransformer(new Interceptor(agentOps), true);
     }
 
     /**
@@ -37,18 +47,74 @@ public class Premain {
      * 动态 attach 方式启动，运行此方法
      * <p>
      * manifest需要配置属性Agent-Class
+     * <p>
+     * 该方法用于在运行时使用agent,获取到需要重载的类，并对这些类进行拦截
+     * <p>
+     * 其中整体的执行依赖于VMThread，VMThread是一个在虚拟机创建时生成的单例原生线程，这个线程能派生出其他线程。同时，这个线程的主要的作用是维护一个vm操作队列(VMOperationQueue)，用于处理其他线程提交的vm operation，比如执行GC等。
+     * <p>
+     * VmThread在执行一个vm操作时，先判断这个操作是否需要在safepoint下执行。若需要safepoint下执行且当前系统
+     * 不在safepoint下，则调用SafepointSynchronize的方法驱使所有线程进入safepoint中，再执行vm操作。
+     * 执行完后再唤醒所有线程。若此操作不需要在safepoint下，或者当前系统已经在safepoint下，则可以直接执行该操作了。
+     * 所以，在safepoint的vm操作下，只有vm线程可以执行具体的逻辑，其他线程都要进入safepoint下并被挂起，直到完成此次操作。
      */
     public static void agentmain(String agentArgs, Instrumentation inst) {
-        System.out.println("attach start ....");
-        customLogic(null, inst);
+        System.out.println("agentmain  start..............");
+        try {
+            List<Class<?>> retransformClasses = new LinkedList<>();
+            Class<?>[] loadedClass = inst.getAllLoadedClasses();
+            for (Class<?> aClass : loadedClass) {
+                if (aClass.getName().contains("com.example")) {
+                    System.out.println(aClass.getName());
+                    retransformClasses.add(aClass);
+                }
+            }
+
+            for (Class<?> result : retransformClasses) {
+                inst.addTransformer(new Interceptor(agentArgs), true);
+                inst.retransformClasses(result);
+            }
+
+            /*inst.addTransformer(new Interceptor(agentArgs));
+            Class<?>[] classes = new Class[retransformClasses.size()];
+            inst.retransformClasses(retransformClasses.toArray(classes));*/
+            System.out.println("agentmain end..............");
+        } catch (Exception ignored) {
+        }
     }
 
-    /**
-     * 统计方法耗时
-     */
-    private static void customLogic(String agentOps, Instrumentation inst) {
-        //add方法会对所有类进行拦截
-        inst.addTransformer(new CostTransformer(agentOps), true);
+    public static void agentmain(String agentArgs) {
+        System.out.println("attach start ....");
+    }
+
+
+    public void attach() {
+        try {
+            String agentJarPath = "E:\\openSource\\java-agent\\target\\java-agent-1.0-SNAPSHOT-jar-with-dependencies.jar";
+            //main方法名
+            String applicationName = "Test";
+            //查到需要监控的进程
+            Optional<String> jvmProcessOpt = Optional.ofNullable(VirtualMachine.list()
+                    .stream()
+                    .filter(jvm -> {
+                        System.out.println("jvm:" + jvm.displayName());
+                        return jvm.displayName().contains(applicationName);
+                    }).findFirst().get().id());
+
+            if (jvmProcessOpt.isEmpty()) {
+                System.out.println("Target Application not found");
+                return;
+            }
+
+            String jvmPid = jvmProcessOpt.get();
+            System.out.println("Attaching to target JVM with PID: " + jvmPid);
+            VirtualMachine jvm = VirtualMachine.attach(jvmPid);
+            jvm.loadAgent(agentJarPath);
+            jvm.detach();
+            System.out.println("Attached to target JVM and loaded Java agent successfully");
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+
     }
 
 }

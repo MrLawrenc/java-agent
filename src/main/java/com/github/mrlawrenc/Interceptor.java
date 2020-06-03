@@ -12,14 +12,14 @@ import java.security.ProtectionDomain;
 /**
  * @author : MrLawrenc
  * @date : 2020/6/2 23:06
- * @description : javassist修改字节码
- *
+ * javassist修改字节码
+ * <p>
  * 若agentOps不为空，则根据agentOps值来对所有类的方法进行拦截
  */
-public class CostTransformer implements ClassFileTransformer {
-    private String agentOps;
+public class Interceptor implements ClassFileTransformer {
+    private final String agentOps;
 
-    public CostTransformer(String agentOps) {
+    public Interceptor(String agentOps) {
         if (null != agentOps) {
             agentOps = agentOps.replaceAll("\\.", "/");
         }
@@ -30,11 +30,10 @@ public class CostTransformer implements ClassFileTransformer {
     public byte[] transform(ClassLoader loader, String className, Class<?> classBeingRedefined,
                             ProtectionDomain protectionDomain, byte[] classfileBuffer) {
 
+        // 这里我们限制下
         if (agentOps != null && !className.startsWith(agentOps)) {
             return classfileBuffer;
         }
-
-        // 这里我们限制下，只针对目标包下进行耗时统计
         if (className.startsWith("com/sun") || className.startsWith("javax") || !className.startsWith("com")) {
             return classfileBuffer;
         }
@@ -56,8 +55,7 @@ public class CostTransformer implements ClassFileTransformer {
                         ".currentTimeMillis() - start));");
             }
 
-            byte[] transformed = cl.toBytecode();
-            return transformed;
+            return cl.toBytecode();
         } catch (Exception ignored) {
 
         }
