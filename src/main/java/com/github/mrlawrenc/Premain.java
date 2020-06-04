@@ -1,14 +1,16 @@
 package com.github.mrlawrenc;
 
+import com.google.common.collect.HashBasedTable;
 import com.sun.tools.attach.VirtualMachine;
 
 import java.io.File;
 import java.io.FileInputStream;
+import java.io.IOException;
 import java.lang.instrument.ClassDefinition;
 import java.lang.instrument.Instrumentation;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Optional;
+import java.util.*;
+import java.util.jar.JarEntry;
+import java.util.jar.JarFile;
 
 /**
  * @author : MrLawrenc
@@ -60,7 +62,7 @@ public class Premain {
      * 执行完后再唤醒所有线程。若此操作不需要在safepoint下，或者当前系统已经在safepoint下，则可以直接执行该操作了。
      * 所以，在safepoint的vm操作下，只有vm线程可以执行具体的逻辑，其他线程都要进入safepoint下并被挂起，直到完成此次操作。
      */
-    public static void agentmain(String agentArgs, Instrumentation inst)   {
+    public static void agentmain(String agentArgs, Instrumentation inst) {
         System.out.println("agentmain  start..............");
         if (true) {
             try {
@@ -96,21 +98,121 @@ public class Premain {
         System.out.println("attach start ....");
     }
 
+    /**
+     * @param path     检索的目标路径
+     * @param fileList 存储所有class文件
+     * @param jarList  存储所有的jar文件
+     */
+    public static void getAllFileName(String path, ArrayList<File> fileList, ArrayList<File> jarList) {
+        File parent = new File(path);
+        File[] tempList = parent.listFiles();
+        if (tempList == null) {
+            return;
+        }
+        for (File file : tempList) {
+            if (file.isFile()) {
+                if (file.getName().endsWith(".jar")) {
+                    jarList.add(file);
+                }
+                if (file.getName().endsWith(".class")) {
+                    fileList.add(file);
+                }
+            }
+            if (file.isDirectory()) {
+                getAllFileName(file.getAbsolutePath(), fileList, jarList);
+            }
+        }
+    }
 
     public static void hot(String agentArgs, Instrumentation inst) throws Exception {
-        Class[] allLoadedClasses = inst.getAllLoadedClasses();
 
-        for (Class aClass : allLoadedClasses) {
-            if (aClass.getName().equals("com.swust.HelloServiceImpl")) {
-                File file = new File("F:\\openSources\\test\\out\\production\\test\\com\\swust\\HelloServiceImpl.class");
-                byte[] bytes = new FileInputStream(file).readAllBytes();
-                System.out.println("size:" + bytes.length);
+        HashBasedTable<String, JarEntry, JarFile> table = HashBasedTable.create(128, 1);
+        if (agentArgs == null) {
+            throw new NullPointerException("Target dir is  null");
+        }
+        ArrayList<File> clzList = new ArrayList<>();
+        ArrayList<File> jarList = new ArrayList<>();
+        getAllFileName(agentArgs, clzList, jarList);
 
-                ClassDefinition definition = new ClassDefinition(aClass, bytes);
-                inst.redefineClasses(definition);
+
+        //当前环境加载的所有class
+        Class<?>[] allLoadedClasses = inst.getAllLoadedClasses();
+
+        jarList.forEach(jar -> {
+            try {
+                jar2Map(table, jar);
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        });
+
+        //更新已加载的类
+        for (Class<?> aClass : allLoadedClasses) {
+            if (aClass.getName().startsWith("com.swust")) {
+                //更新.class文件
+                for (File currentFile : clzList) {
+                    if (currentFile.getName().contains(aClass.getSimpleName())) {
+                        System.out.println("Update class(.class)  start : " + currentFile.getName());
+                        byte[] bytes = new FileInputStream(currentFile).readAllBytes();
+
+
+                        ClassDefinition definition = new ClassDefinition(aClass, bytes);
+                        inst.redefineClasses(definition);
+                        System.out.println("Update class(.class)  end :" + currentFile.getName());
+                    }
+                }
+
+                //更新jar包
+                for (String jarClzFullName : table.rowKeySet()) {
+                    if (jarClzFullName.equals(aClass.getName())) {
+                        System.out.println("Update class(jar) start : " + jarClzFullName);
+
+                        Map<JarEntry, JarFile> row = table.row(jarClzFullName);
+                        JarEntry jarEntry = row.keySet().iterator().next();
+
+                        byte[] bytes = row.get(jarEntry).getInputStream(jarEntry).readAllBytes();
+
+                        ClassDefinition definition = new ClassDefinition(aClass, bytes);
+                        inst.redefineClasses(definition);
+                        System.out.println("Update class(jar) end : " + jarClzFullName);
+                    }
+                }
             }
         }
 
+    }
+
+    public static void jar2Map(HashBasedTable<String, JarEntry, JarFile> table, File jar) throws IOException {
+        JarFile jarFile = new JarFile(jar);
+        Enumeration<JarEntry> entries = jarFile.entries();
+        while (entries.hasMoreElements()) {
+            JarEntry jarEntry = entries.nextElement();
+            String realName = jarEntry.getRealName();
+            if (!jarEntry.isDirectory() && realName.endsWith(".class")) {
+                String fullClzName = realName.replaceAll("/", ".").split("\\.class")[0];
+                table.put(fullClzName, jarEntry, jarFile);
+            }
+        }
+    }
+
+
+    public static void main(String[] args) throws Exception {
+        File file = new File("F:\\openSources\\java-agent\\target\\java-agent-1.0-SNAPSHOT.jar");
+        JarFile jarFile = new JarFile(file);
+        Enumeration<JarEntry> entries = jarFile.entries();
+        while (entries.hasMoreElements()) {
+            JarEntry jarEntry = entries.nextElement();
+            String realName = jarEntry.getRealName();
+            if (!jarEntry.isDirectory() && realName.endsWith(".class")) {
+                String[] split = realName.split("/");
+                String clzName = split[split.length - 1];
+
+                byte[] jarByte = jarFile.getInputStream(jarEntry).readAllBytes();
+                Thread.currentThread().getContextClassLoader().loadClass(realName.replaceAll("/", "."));
+                System.out.println(clzName);
+            }
+        }
+        System.out.println(file.listFiles());
     }
 
     public void attach() {
