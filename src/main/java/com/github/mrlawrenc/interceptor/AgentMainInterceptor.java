@@ -5,6 +5,8 @@ import javassist.ClassPool;
 import javassist.CtClass;
 import javassist.CtMethod;
 
+import java.io.File;
+import java.io.FileInputStream;
 import java.lang.instrument.ClassFileTransformer;
 import java.lang.instrument.IllegalClassFormatException;
 import java.security.ProtectionDomain;
@@ -78,7 +80,6 @@ public class AgentMainInterceptor implements ClassFileTransformer {
             System.out.println(className+"||");
             CtClass cl = classPool.get(className.replaceAll("/", "."));
             System.out.println(className+"##"+cl);
-
             for (CtMethod method : cl.getDeclaredMethods()) {
                 if (!PublicInterceptor.isNative(method)) {
                     method.addLocalVariable("start", CtClass.longType);
@@ -88,7 +89,16 @@ public class AgentMainInterceptor implements ClassFileTransformer {
                             ".currentTimeMillis() - start));");
                 }
             }
-            return cl.toBytecode();
+            cl.detach();
+
+
+            if (className.equals("com/swust/Test1")){
+                //这种方式可以替换原来的类，和上面的插桩效果一样，但也受限于方法，不能改变成员属性，增加行为方法
+                FileInputStream inputStream = new FileInputStream(new File("F:\\openSources\\test\\out\\production\\test\\com\\swust\\Test1.class"));
+                return inputStream.readAllBytes();
+            }else {
+                return cl.toBytecode();
+            }
         } catch (Exception e) {
             e.printStackTrace();
             return null;

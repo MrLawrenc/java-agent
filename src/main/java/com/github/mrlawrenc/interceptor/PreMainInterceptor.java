@@ -33,14 +33,14 @@ public class PreMainInterceptor implements ClassFileTransformer {
         if (agentOps != null && !className.startsWith(agentOps)) {
             return classfileBuffer;
         }
-        if (className.startsWith("com/sun") || className.startsWith("javax") || !className.startsWith("com")) {
+        if (!className.startsWith("com/swust")) {
             return classfileBuffer;
         }
-
-        CtClass cl = null;
+        System.out.println("拦截到的类:" + className);
         try {
             ClassPool classPool = ClassPool.getDefault();
-            cl = classPool.makeClass(new ByteArrayInputStream(classfileBuffer));
+            CtClass cl = classPool.makeClass(new ByteArrayInputStream(classfileBuffer));
+
 
             for (CtMethod method : cl.getDeclaredMethods()) {
                 if (PublicInterceptor.isNative(method)) {
@@ -55,8 +55,8 @@ public class PreMainInterceptor implements ClassFileTransformer {
             }
 
             return cl.toBytecode();
-        } catch (Exception ignored) {
-
+        } catch (Exception e) {
+            e.printStackTrace();
         }
         return classfileBuffer;
     }

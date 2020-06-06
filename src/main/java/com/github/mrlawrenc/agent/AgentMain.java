@@ -1,5 +1,7 @@
 package com.github.mrlawrenc.agent;
 
+import com.alibaba.fastjson.JSON;
+import com.github.mrlawrenc.entity.JsonAgentArg;
 import com.github.mrlawrenc.interceptor.AgentMainInterceptor;
 import com.google.common.collect.HashBasedTable;
 import com.sun.tools.attach.VirtualMachine;
@@ -22,6 +24,7 @@ public class AgentMain {
 
 
     /**
+     * System.getProperties().put("sun.misc.ProxyGenerator.saveGeneratedFiles", "true"); 保存代理类
      * 动态 attach 方式启动，运行此方法
      * <p>
      * manifest需要配置属性Agent-Class
@@ -36,11 +39,14 @@ public class AgentMain {
      * 所以，在safepoint的vm操作下，只有vm线程可以执行具体的逻辑，其他线程都要进入safepoint下并被挂起，直到完成此次操作。
      */
     public static void agentmain(String agentArgs, Instrumentation inst) {
-        System.out.println("agentmain  start..............");
+        System.out.println("#####################agentmain  start#####################");
+        System.out.println("agent args : " + agentArgs);
+        JsonAgentArg jsonAgentArg = JSON.parseObject(agentArgs, JsonAgentArg.class);
 
-        if (enableHot) {
+
+        if (jsonAgentArg.isEnableHotUpdate()) {
             try {
-                hot(agentArgs, inst);
+                hot(jsonAgentArg.getRedefinePath()[0], inst);
             } catch (Exception exception) {
                 exception.printStackTrace();
             }
@@ -75,6 +81,7 @@ public class AgentMain {
             } catch (Exception e) {
                 e.printStackTrace();
             }
+            System.out.println("#####################agentmain  end#####################");
         }
     }
 
