@@ -27,7 +27,7 @@
               <transformers>
                 <transformer>
                   <manifestEntries>
-                    <Premain-Class>com.github.mrlawrenc.Premain</Premain-Class>
+                    <Premain-Class>com.github.mrlawrenc.agent.PreMain</Premain-Class>
                   </manifestEntries>
                 </transformer>
               </transformers>

@@ -1,9 +1,8 @@
-package com.github.mrlawrenc;
+package com.github.mrlawrenc.interceptor;
 
 import javassist.ClassPool;
 import javassist.CtClass;
 import javassist.CtMethod;
-import javassist.Modifier;
 
 import java.io.ByteArrayInputStream;
 import java.lang.instrument.ClassFileTransformer;
@@ -11,15 +10,15 @@ import java.security.ProtectionDomain;
 
 /**
  * @author : MrLawrenc
- * @date : 2020/6/2 23:06
+ * date : 2020/6/2 23:06
  * javassist修改字节码
  * <p>
  * 若agentOps不为空，则根据agentOps值来对所有类的方法进行拦截
  */
-public class Interceptor implements ClassFileTransformer {
+public class PreMainInterceptor implements ClassFileTransformer {
     private final String agentOps;
 
-    public Interceptor(String agentOps) {
+    public PreMainInterceptor(String agentOps) {
         if (null != agentOps) {
             agentOps = agentOps.replaceAll("\\.", "/");
         }
@@ -44,7 +43,7 @@ public class Interceptor implements ClassFileTransformer {
             cl = classPool.makeClass(new ByteArrayInputStream(classfileBuffer));
 
             for (CtMethod method : cl.getDeclaredMethods()) {
-                if (isNative(method)) {
+                if (PublicInterceptor.isNative(method)) {
                     continue;
                 }
                 // 所有方法，统计耗时；请注意，需要通过`addLocalVariable`来声明局部变量
@@ -62,7 +61,4 @@ public class Interceptor implements ClassFileTransformer {
         return classfileBuffer;
     }
 
-    public boolean isNative(CtMethod method) {
-        return Modifier.isNative(method.getModifiers());
-    }
 }

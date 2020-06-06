@@ -59,13 +59,13 @@
                             Created-By: Apache Maven
                             Built-By: Liu Mingyao
                             Build-Jdk: 11.0.3
-                            Agent-Class: com.github.mrlawrenc.Premain
+                            Agent-Class: com.github.mrlawrenc.agent.PreMain
                             Can-Redefine-Classes: true
                             Can-Retransform-Classes: true
-                            Premain-Class: com.github.mrlawrenc.Premain
+                            Premain-Class: com.github.mrlawrenc.agent.PreMain
                             -->
-                            <Premain-Class>com.github.mrlawrenc.Premain</Premain-Class>
-                            <Agent-Class>com.github.mrlawrenc.Premain</Agent-Class>
+                            <Premain-Class>com.github.mrlawrenc.agent.PreMain</Premain-Class>
+                            <Agent-Class>com.github.mrlawrenc.agent.AgentMain</Agent-Class>
                             <Can-Redefine-Classes>true</Can-Redefine-Classes>
                             <Can-Retransform-Classes>true</Can-Retransform-Classes>
                         </manifestEntries>
